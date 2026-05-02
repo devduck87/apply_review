@@ -9,9 +9,10 @@ set -euo pipefail
 #   2) BASE_COMMIT の作業ツリーに 01_after の変更ファイルを上書きし、内部レビュー済みスナップショットとしてコミット
 #   3) format-patch でパッチを生成 (patches/ に保存。後日の再適用や保管用)
 #   4) 元のブランチに戻り、temp ブランチを削除
-#   5) git am --3way でパッチを現在の HEAD に適用
+#   5) git apply --3way でパッチを作業ツリーに適用し、現在の git config のユーザーでコミット
+#      (パッチに含まれる author 情報は引き継がない)
 #
-# 衝突時は test/ で git am --continue / --abort して対処する。
+# 衝突時は test/ でコンフリクトマーカーを手で解決し、git add → git commit する。
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_DIR="${SCRIPT_DIR}/01_after"
@@ -79,8 +80,10 @@ git branch -D "$TEMP_BRANCH" >/dev/null
 trap - ERR  # 以降は git am の失敗をエラー扱いにしない
 
 # --- 5) 3-way マージで適用 ---
-echo "==> apply patch with git am --3way"
-if git am --3way "$PATCH_FILE"; then
+echo "==> apply patch with git apply --3way"
+if git apply --3way "$PATCH_FILE"; then
+  git add -A
+  git commit --quiet -m "$COMMIT_MSG"
   echo ""
   echo "done."
   echo "  patch:  $PATCH_FILE"
@@ -88,11 +91,10 @@ if git am --3way "$PATCH_FILE"; then
 else
   cat >&2 <<EOF
 
-conflict during git am. resolve manually in $TARGET_REPO:
-  # edit conflicted files
+conflict during git apply. resolve manually in $TARGET_REPO:
+  # edit conflicted files (look for <<<<<<< markers)
   git add <files>
-  git am --continue
-or abort: git am --abort
+  git commit -m "$COMMIT_MSG"
 
 patch file is preserved at: $PATCH_FILE
 EOF
