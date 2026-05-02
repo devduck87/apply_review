@@ -1,0 +1,3 @@
+[submodule "git-practice-sample"]
+	path = git-practice-sample
+	url = ./git-practice-sample/
